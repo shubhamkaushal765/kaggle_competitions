@@ -1,7 +1,6 @@
 import os
 import librosa
-import sklearn
-
+from tqdm import tqdm
 import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
@@ -11,9 +10,20 @@ class Data:
     def __init__(
         self, csv_path="data/birdclef2024/train_metadata.csv", plot_hist=False
     ):
+        """
+        Initialize the Data class.
+
+        Parameters:
+        - csv_path (str): Path to the CSV file containing metadata.
+        - plot_hist (bool): If True, plot a histogram of category counts.
+
+        This class is used for data analytics and feature extraction from audio files.
+        """
+
         self.df = pl.read_csv(csv_path)
         self.df = self.df[["primary_label", "rating", "url", "filename"]]
 
+        # Mapping labels to unique identifiers
         label_col = "primary_label"
         unique_labels = sorted(list(set(self.df[label_col])))
         self.name2id = {name: id for id, name in enumerate(unique_labels)}
@@ -29,6 +39,11 @@ class Data:
             plt.show()
 
     def generate_analytics(self):
+        """
+        Generate analytics based on label counts.
+
+        This method calculates and prints various statistics on label counts.
+        """
 
         vc = self.vc
 
@@ -47,74 +62,78 @@ class Data:
         print(f"Number of min values: {n_mins}")
         print(f"Number of max values: {n_maxs}")
 
-    def audio_features(self, data_root="./data/birdclef2024/train_audio/"):
-        """https://towardsdatascience.com/extract-features-of-music-75a3f9bc265d"""
+    def audio_features(
+        self,
+        index,
+        sampling_duration=5,
+        percentile_width=25,
+        stft_width=8,
+        data_root="./data/birdclef2024/train_audio/",
+    ):
+        """
+        Extract audio features from an audio file.
+        Sources:
+        - https://towardsdatascience.com/extract-features-of-music-75a3f9bc265d
 
-        row = self.df[0]
+        Parameters:
+        - index (int): Index of the file in the dataframe.
+        - sampling_duration (int): Duration in seconds to sample the audio.
+        - percentile_width (int): Width of percentile calculation.
+        - stft_width (int): Width of Short-Time Fourier Transform.
+        - data_root (str): Root directory containing audio files.
+
+        Returns:
+        - DataFrame: Extracted audio features as a Polars DataFrame.
+        """
+
+        row = self.df[index]
         audio_path = os.path.join(data_root, row["filename"][0])
+        label_id = self.name2id[os.path.basename(os.path.dirname(audio_path))]
 
         x, sr = librosa.load(audio_path, sr=None)
+        chunk_size = sampling_duration * sr
 
-        # Short Term Fourier Transform
-        X = np.array(librosa.stft(x))
-        Xdb = np.array(librosa.amplitude_to_db(abs(X)))
-        print(f"Short Term Fourier Transform: {X.shape}")
-        print(f"STFT in db: {Xdb.shape}")
-        print("################################")
-        # plt.figure(figsize=(14, 5))
-        # librosa.display.specshow(Xdb, sr=sr, x_axis="time", y_axis="hz")  # y_axis='log'
-        # plt.colorbar()
-        # plt.show()
-        ################################################################
+        output_df = pl.DataFrame()
 
-        # Zero Crossing Rate
-        zero_crossings = librosa.zero_crossings(x, pad=True)
-        print(f"Zero Crossings Shape: {zero_crossings.shape}")
-        print(f"Non-negative places of zero crossing: {sum(zero_crossings)}")
-        print(zero_crossings)
-        print("################################")
-        ################################################################
+        # chunking out sampling duration
+        for i in range(0, len(x), chunk_size):
 
-        # Spectral Centroid
-        spectral_centroids = librosa.feature.spectral_centroid(y=x, sr=sr)[0]
-        print(f"Spectral Centroids Shape: {spectral_centroids.shape}")
-        print("################################")
+            x_sample = x[i : i + chunk_size]
+            x_sample = librosa.util.fix_length(x_sample, size=chunk_size)
+            if sum(x_sample) == 0:
+                continue
 
-        # Computing the time variable for visualization
-        frames = range(len(spectral_centroids))
-        t = librosa.frames_to_time(frames, sr=sr)
+            # Short Term Fourier Transform
+            X = np.array(librosa.stft(x_sample))
+            Xdb = np.array(librosa.amplitude_to_db(abs(X)))[::stft_width]
+            # Zero Crossing Rate
+            zerox = librosa.feature.zero_crossing_rate(x_sample)
+            # Spectral Centroid & Spectral Rolloff
+            s_divisor = 1000
+            s_ctrds = librosa.feature.spectral_centroid(y=x_sample, sr=sr) / s_divisor
+            s_rolloff = librosa.feature.spectral_rolloff(y=x_sample, sr=sr) / s_divisor
+            # Mel-Frequency Cepstral Coefficients
+            mfccs = librosa.feature.mfcc(y=x_sample, sr=sr)
 
-        # # Normalising the spectral centroid for visualisation
-        # def normalize(x, axis=0):
-        #     return sklearn.preprocessing.minmax_scale(x, axis=axis)
-
-        # # Plotting the Spectral Centroid along the waveform
-        # # librosa.display.waveplot(x, sr=sr, alpha=0.4)
-        # plt.plot(t, spectral_centroids, color="r")
-        # plt.show()
-        ################################################################
-
-        # Spectral Rolloff
-        spectral_rolloff = librosa.feature.spectral_rolloff(y=x, sr=sr)[0]
-        print(f"Spectral Rolloff Shape: {spectral_rolloff.shape}")
-        print("################################")
-
-        # librosa.display.waveshow(y=x, sr=sr)
-        # plt.plot(t, spectral_rolloff, color="r")
-        # plt.show()
-        ################################################################
-
-        # Mel-Frequency Cepstral Coefficients
-        mfccs = librosa.feature.mfcc(y=x, sr=sr)
-        print(f"Mel-Frequency Cepstral Coefficients: {mfccs.shape}")
-        print("################################")
-        # # Displaying  the MFCCs:
-        # librosa.display.specshow(mfccs, sr=sr, x_axis="time")
-        # plt.show()
-        ################################################################
+            # Generate relevant statistics from metrics
+            output = [label_id]
+            for m in [Xdb, zerox, s_ctrds, s_rolloff, mfccs]:
+                output.extend(m.mean(axis=-1).tolist() + m.std(axis=-1).tolist())
+                for p in range(0, 101, percentile_width):
+                    output.extend(np.percentile(m, p, axis=-1).tolist())
+            # assert len(output) == 1048 * 13 + 1, (len(output), 1048 * 13 + 1)
+            output_df = pl.concat([output_df, pl.DataFrame(output).transpose()])
+        return output_df
 
 
 if __name__ == "__main__":
     ds = Data()
-    # ds.generate_analytics()
-    ds.audio_features()
+    bucket_size = 500
+    for df_i in tqdm(range(0, len(ds.df), bucket_size)):
+        dfs = []
+
+        for i in tqdm(range(df_i, df_i + bucket_size)):
+            dfs.append(ds.audio_features(index=i))
+
+        dfs = pl.concat(dfs)
+        dfs.write_csv(f"./data/processed_pickles/_{df_i}_{df_i + bucket_size}.csv")

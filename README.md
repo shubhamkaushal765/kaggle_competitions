@@ -17,7 +17,8 @@
 
 ## TODO
 
-- Generate all the other metrics for all audios.
-- Add zero-crossing analysis to data_exploration.Data.audio_features - [source](https://www.analyticsvidhya.com/blog/2022/01/analysis-of-zero-crossing-rates-of-different-music-genre-tracks/)
-- Create different yet simmilar analysis to zero-crossing. For example, zero-max-mean line crossing. rms line crossing.
-- [speechprocessingbook.aalto.fi](https://speechprocessingbook.aalto.fi/Representations/Zero-crossing_rate.html#:~:text=To%20calculate%20of%20the%20zero,length%20signal%20you%20need%20operations.)
+- [x] Add zero-crossing analysis to `data_exploration.Data.audio_features` - [source](https://www.analyticsvidhya.com/blog/2022/01/analysis-of-zero-crossing-rates-of-different-music-genre-tracks/)
+- [x] Generate all the other metrics for all audios.
+- [ ] Create different yet similar analyses to zero-crossing. For example, zero-max-mean line crossing, RMS line crossing.
+- [ ] [Calculate zero-crossing rate](https://speechprocessingbook.aalto.fi/Representations/Zero-crossing_rate.html#:~:text=To%20calculate%20of%20the%20zero,length%20signal%20you%20need%20operations.)
+- [ ] Train Models
