@@ -1,0 +1,5 @@
+n_estimators,max_depth,oob_score,random_state,verbose,class_weight,max_features,n_jobs,ckpt
+50,32,0.5724726466299913,42,3,balanced,log2,-1,ckpts\rfc_clf_3.pkl
+25,32,0.48671232708871925,42,3,balanced,log2,-1,ckpts\rfc_clf_2.pkl
+25,16,0.22905767180856929,42,3,balanced,log2,-1,ckpts\rfc_clf_1.pkl
+10,,0.42531580430547555,42,3,balanced,log2,-1,ckpts\rfc_clf_0.pkl
