@@ -4,11 +4,24 @@ from tqdm import tqdm
 import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+
+
+def check_for_existing_df(path):
+    df = pl.DataFrame()
+    if os.path.exists(path):
+        print(f"{path} already exists.")
+        df = pl.read_csv(path)
+        os.remove(path)
+    return df
 
 
 class Data:
     def __init__(
-        self, csv_path="data/birdclef2024/train_metadata.csv", plot_hist=False
+        self,
+        csv_path="data/birdclef2024/train_metadata.csv",
+        plot_hist=False,
+        train_test_path="data/train_val/",
     ):
         """
         Initialize the Data class.
@@ -19,6 +32,22 @@ class Data:
 
         This class is used for data analytics and feature extraction from audio files.
         """
+
+        assert (csv_path is None) or (train_test_path is None)
+
+        self.df_tr = pl.DataFrame()
+        self.df_val = pl.DataFrame()
+
+        if train_test_path is not None:
+            files = os.listdir(train_test_path)
+            for f in files:
+                if "train" in f:
+                    df = pl.read_csv(os.path.join(train_test_path, f))
+                    self.df_tr = pl.concat([self.df_tr, df])
+                elif "val" in f:
+                    df = pl.read_csv(os.path.join(train_test_path, f))
+                    self.df_val = pl.concat([self.df_val, df])
+            return
 
         self.df = pl.read_csv(csv_path)
         self.df = self.df[["primary_label", "rating", "url", "filename"]]
@@ -67,7 +96,7 @@ class Data:
         index,
         sampling_duration=5,
         percentile_width=25,
-        stft_width=8,
+        stft_width=256,
         data_root="./data/birdclef2024/train_audio/",
     ):
         """
@@ -125,15 +154,57 @@ class Data:
             output_df = pl.concat([output_df, pl.DataFrame(output).transpose()])
         return output_df
 
+    def train_test_split(self, seed=42, processed_pickles="./data/processed_pickles/"):
+        pickles = os.listdir(processed_pickles)
+        train_val_path = "./data/train_val/"
+
+        for pkl in tqdm(pickles):
+            file_path = os.path.join(processed_pickles, pkl)
+            df = pl.read_csv(file_path)
+            labels = map(int, df["column_0"].unique().to_list())
+            for l in labels:
+
+                # check for existing df
+                tr_path = os.path.join(train_val_path, f"train_{l}.csv")
+                df_tr = check_for_existing_df(tr_path)
+                val_path = os.path.join(train_val_path, f"val_{l}.csv")
+                df_val = check_for_existing_df(val_path)
+
+                # train test split
+                df_l = df.filter(pl.col("column_0") == l)
+                val_size = int(np.ceil(len(df_l) * 0.25))
+                X_tr, X_val = train_test_split(
+                    df_l, test_size=val_size, random_state=seed
+                )
+
+                # appending and saving df
+                df_tr = pl.concat([df_tr, X_tr])
+                df_val = pl.concat([df_val, X_val])
+                df_tr.write_csv(tr_path)
+                df_val.write_csv(val_path)
+
+                self.df_tr = pl.concat([self.df_tr, X_tr])
+                self.df_val = pl.concat([self.df_val, X_val])
+
 
 if __name__ == "__main__":
-    ds = Data()
-    bucket_size = 500
-    for df_i in tqdm(range(0, len(ds.df), bucket_size)):
-        dfs = []
+    ds = Data(csv_path=None)
 
-        for i in tqdm(range(df_i, df_i + bucket_size)):
-            dfs.append(ds.audio_features(index=i))
+    # STEP 1:
+    # Generate Processed Pickles
+    # bucket_size = 2000
+    # for df_i in tqdm(range(24000, len(ds.df), bucket_size)):
+    #     dfs = []
 
-        dfs = pl.concat(dfs)
-        dfs.write_csv(f"./data/processed_pickles/_{df_i}_{df_i + bucket_size}.csv")
+    #     for i in tqdm(range(df_i, df_i + bucket_size)):
+    #         try:
+    #             dfs.append(ds.audio_features(index=i))
+    #         except:
+    #             continue
+    #     dfs = pl.concat(dfs)
+    #     dfs.write_csv(f"./data/processed_pickles/_{df_i}_{df_i + bucket_size}.csv")
+
+    # STEP 2:
+    # ds.train_test_split()
+
+    print(ds.df_tr.shape, ds.df_val.shape)

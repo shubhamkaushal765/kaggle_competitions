@@ -1,2 +1,4 @@
 data/
 _env_*/
+__pycache__/
+ckpts/
