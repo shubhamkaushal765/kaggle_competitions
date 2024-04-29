@@ -22,3 +22,7 @@
 - [ ] Create different yet similar analyses to zero-crossing. For example, zero-max-mean line crossing, RMS line crossing.
 - [ ] [Calculate zero-crossing rate](https://speechprocessingbook.aalto.fi/Representations/Zero-crossing_rate.html#:~:text=To%20calculate%20of%20the%20zero,length%20signal%20you%20need%20operations.)
 - [ ] Train Models
+  - [ ] Hierarchical Training: 
+    - step1: 0-10, 10-20, ... models
+    - step2: model1: 0:0-10, 1:10-20, 2:20-30, 3:30-40, 4:40-50, model2: ...
+    - ...

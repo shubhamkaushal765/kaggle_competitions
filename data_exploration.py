@@ -52,10 +52,14 @@ class Data:
             if allowed_labels:
                 tr_temp, val_temp = [], []
                 for l in allowed_labels:
-                    tr_temp.append([self.df_tr.filter(self.df_tr["column_0"] == l)])
-                    val_temp.append([self.df_val.filter(self.df_val["column_0"] == l)])
+                    tr_temp.append(self.df_tr.filter(self.df_tr["column_0"] == l))
+                    if load_val:
+                        val_temp.append(
+                            self.df_val.filter(self.df_val["column_0"] == l)
+                        )
                 self.df_tr = pl.concat(tr_temp)
-                self.df_val = pl.concat(val_temp)
+                if load_val:
+                    self.df_val = pl.concat(val_temp)
         else:
             self.df = pl.read_csv(csv_path)
             self.df = self.df[["primary_label", "rating", "url", "filename"]]
