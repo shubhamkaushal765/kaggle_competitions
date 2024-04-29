@@ -22,6 +22,8 @@ class Data:
         csv_path="data/birdclef2024/train_metadata.csv",
         plot_hist=False,
         train_test_path="data/train_val/",
+        load_val=False,
+        allowed_labels=None,
     ):
         """
         Initialize the Data class.
@@ -44,28 +46,34 @@ class Data:
                 if "train" in f:
                     df = pl.read_csv(os.path.join(train_test_path, f))
                     self.df_tr = pl.concat([self.df_tr, df])
-                elif "val" in f:
+                elif load_val and "val" in f:
                     df = pl.read_csv(os.path.join(train_test_path, f))
                     self.df_val = pl.concat([self.df_val, df])
-            return
+            if allowed_labels:
+                tr_temp, val_temp = [], []
+                for l in allowed_labels:
+                    tr_temp.append([self.df_tr.filter(self.df_tr["column_0"] == l)])
+                    val_temp.append([self.df_val.filter(self.df_val["column_0"] == l)])
+                self.df_tr = pl.concat(tr_temp)
+                self.df_val = pl.concat(val_temp)
+        else:
+            self.df = pl.read_csv(csv_path)
+            self.df = self.df[["primary_label", "rating", "url", "filename"]]
 
-        self.df = pl.read_csv(csv_path)
-        self.df = self.df[["primary_label", "rating", "url", "filename"]]
+            # Mapping labels to unique identifiers
+            label_col = "primary_label"
+            unique_labels = sorted(list(set(self.df[label_col])))
+            self.name2id = {name: id for id, name in enumerate(unique_labels)}
+            self.id2name = {id: name for name, id in self.name2id.items()}
 
-        # Mapping labels to unique identifiers
-        label_col = "primary_label"
-        unique_labels = sorted(list(set(self.df[label_col])))
-        self.name2id = {name: id for id, name in enumerate(unique_labels)}
-        self.id2name = {id: name for name, id in self.name2id.items()}
-
-        self.vc = self.df[label_col].value_counts()
-        if plot_hist:
-            plt.figure(figsize=(8, 6))
-            plt.bar(self.vc[label_col], self.vc["count"], color="skyblue")
-            plt.xlabel("Labels")
-            plt.ylabel("Count")
-            plt.title("Histogram of Category Counts")
-            plt.show()
+            self.vc = self.df[label_col].value_counts()
+            if plot_hist:
+                plt.figure(figsize=(8, 6))
+                plt.bar(self.vc[label_col], self.vc["count"], color="skyblue")
+                plt.xlabel("Labels")
+                plt.ylabel("Count")
+                plt.title("Histogram of Category Counts")
+                plt.show()
 
     def generate_analytics(self):
         """
@@ -207,4 +215,6 @@ if __name__ == "__main__":
     # STEP 2:
     # ds.train_test_split()
 
-    print(ds.df_tr.shape, ds.df_val.shape)
+    # STEP 3: train data exploration
+    # cols: {0: label_id, (1-5)*7: Xdb, 6*7: zerox, 7*7: spectral centroid, 8*7: spectral rolloff, (9-28)*7: mfcc}
+    ds.explore_train_data()
