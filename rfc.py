@@ -47,13 +47,13 @@ class RFC:
             os.remove(log_file)
         logs.write_csv(log_file)
 
-    def train_and_save(self, comment, col_start=56, col_end=56 + 140):
+    def train_and_save(self, comment, col_start=56, col_end=56 + 140, bin_divisor=10):
 
         logs = self.logs
         clf = RandomForestClassifier(**logs)
         ds = Data(csv_path=None, allowed_labels=self.allowed_labels)
 
-        y = ds.df_tr["column_0"]
+        y = ds.df_tr["column_0"] // bin_divisor
         print(f"Allowed labels: {self.allowed_labels}")
         print(f"Labels found: {list(map(int, y.unique().to_list()))}")
 
@@ -80,7 +80,11 @@ class RFC:
 
 
 if __name__ == "__main__":
-    for i in range(30, 190, 10):
-        allowed_labels = list(range(i, i + 10))
+    step = 100
+    bins = 20
+    for i in range(0, 190, step):
+        allowed_labels = list(range(i, i + step))
         rfc = RFC(allowed_labels=allowed_labels)
-        rfc.train_and_save(comment=f"scaler-mfcc-labels-{i}-{i+10}")
+        rfc.train_and_save(
+            comment=f"scaler-mfcc-labels-{i}-{i+step}-bin-{bins}", bin_divisor=bins
+        )
